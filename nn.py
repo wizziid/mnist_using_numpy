@@ -1,8 +1,6 @@
 import numpy as np
 import math
 
-# from decimal import Decimal
-
 """
 Activation/loss functions and derivatives
 """
@@ -10,12 +8,12 @@ Activation/loss functions and derivatives
 
 # softmax
 def softmax(x):
-    e_x = np.exp(x - np.max(x))  #
-    return e_x / e_x.sum(axis=0)  # only difference
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0)
 
 
 def derivative_softmax_input(a, lab):
-    # derivative of error with respect to softmax input is actually the one hot encoded label vector subtracted from
+    # derivative of error with respect to softmax input is the one hot encoded label vector subtracted from
     # the softmax output. Crazy math going on.
     return np.subtract(a, lab)
 
@@ -30,26 +28,19 @@ def relu_derivative(n):
 
 
 def multi_class_cross_entropy(a, lab):
-    # 1 * value from output vector at same index as class in the encoding
-    one_d_a = a.A1
-    one_d_lab = lab.A1
-    # print(one_d_a)
-    # print(one_d_lab)
-    # classification = np.argmax(one_d_lab)
-    # print(classification)
-
+    # 1 * value from output vector at same index as class in the one hot encoding
     return math.log(a.A1[np.argmax(lab.A1)])
 
 
+# vectorize functions that are applied to np vector/array/matrix
 v_relu = np.vectorize(relu)
 v_relu_d = np.vectorize(relu_derivative)
 v_soft_max = np.vectorize(softmax)
 
-# SIGMOID_VEC_FUNC = np.vectorize(sigmoid)
-# SIGMOID_DERIVATIVE_VEC_FUNC = np.vectorize(sigmoid_derivative)
 """
 Importing data
 """
+
 # get training inputs and labels.
 training_data = np.loadtxt("data/mnist_train.csv", delimiter=",")
 test_data = np.loadtxt("data/mnist_test.csv", delimiter=",")
@@ -61,15 +52,13 @@ test_labels = np.copy(test_data[:, 0])
 training_inputs = np.copy(training_data[:, 1:])
 test_inputs = np.copy(test_data[:, 1:])
 
-# normalize training and test inputs
-training_inputs = np.divide(training_inputs, 255)
-test_inputs = np.divide(test_inputs, 255)
-
-np.matrix(training_inputs)
-np.matrix(test_inputs)
+# normalize training and test inputs. Could be more dynamic and use training_inputs.max or something.
+training_inputs = np.matrix(np.divide(training_inputs, 255))
+test_inputs = np.matrix(np.divide(test_inputs, 255))
 
 # encode classes for easy error calculation.
-encoded_training_labels = np.zeros((len(training_data), 10))  # know there is 10 classes 0-9
+# NOTE: know there is 10 classes 0-9. Maybe should find dynamically
+encoded_training_labels = np.zeros((len(training_data), 10))
 encoded_test_labels = np.zeros((len(test_data), 10))
 
 print(np.shape(encoded_training_labels))
@@ -80,22 +69,19 @@ for i in range(len(training_data)):
 
 for i in range(len(test_data)):
     encoded_test_labels[i][int(test_labels[i])] = 1
-# get meta data (feature count, class count, etc...)
 
 np.matrix(encoded_training_labels)
 np.matrix(encoded_test_labels)
 
-# layers * nodes_in_current_layer * nodes_in_previous_layer. This can be hardcoded for now
-
-
 """
 Hyper parameters
 """
-LEARNING_RATE = .01
+LEARNING_RATE = .001
 input_count, layer_one_node_count = np.shape(training_inputs)  # layer one node count == feature count
-layer_two_node_count = 100  # second layer nodes
-layer_three_node_count = 50  # third layer nodes
+layer_two_node_count = 200  # second layer nodes
+layer_three_node_count = 100  # third layer nodes
 layer_four_node_count = 10  # layer four node count == class count
+epochs = 10
 
 """
 initialize weights & bias
@@ -114,11 +100,9 @@ biases = [
     np.matrix(np.random.uniform(-.1, .1, size=(layer_four_node_count, 1)))
 ]
 
+epoch = 0
 # training loop
-
-epochs = 0
-
-while epochs < 5:
+while epoch < epochs:
     correct = 1
     # for i in range(1):
     for i in range(len(training_inputs)):
@@ -133,27 +117,21 @@ while epochs < 5:
         L2_z = (weights[0] * input) + biases[0]
         # apply relu
         L2_a = v_relu(L2_z)
-        # print(L2_z)
-        # print(L2_a)
 
         # L2->L3 relu(W*L1_a + bias)
         L3_z = (weights[1] * L2_a) + biases[1]
         L3_a = v_relu(L3_z)
-        # print(L3_z)
-        # print(L3_a)
 
         # L3->L4 softmax(W*L3_a + bias)
         L4_z = (weights[2] * L3_a) + biases[2]
-        # print(L4_z)
         L4_a = softmax(L4_z)  # network output.
 
         if np.argmax(L4_a) == np.argmax(label):
             correct += 1
 
-
         # get network error
         if L4_a[np.argmax(L4_a)] == np.NAN:
-            break
+            continue
         else:
             error = multi_class_cross_entropy(L4_a, label)
 
@@ -188,13 +166,13 @@ while epochs < 5:
             weights[w] = weights[w] + weight_deltas[w]
             biases[w] = biases[w] + bias_deltas[w]
 
-        print("Epoch: ", epochs, "input: ", i + 1, "  Accuracy: ", correct / (i + 1), "  Error: ", error)
+        print("Epoch: ", epoch, "input: ", i + 1, "  Accuracy: ", correct / (i + 1), "  Error: ", error)
         # FORWARD PASS record outputs for finding derivative of error of nodes in each layer with respect to weights
         # feeding into layer.
 
-    epochs += 1
+    epoch += 1
 
-# perform cross validation on test inputs
+# validate on test set
 test_count = 0
 test_correct = 0
 for t in range(len(test_inputs)):
@@ -220,14 +198,10 @@ for t in range(len(test_inputs)):
 
     print("Test input: ", test_count, " Accuracy: ", (test_correct / test_count), "  Error: ", error)
 
-    """
-    To do now:
-    
-    - make sure dimensions are consistent (for matmul).
-    - track accuracy
-    - add a full training loop so can perform multiple epochs
-    - make network capable of batches.
-    - get matplotlib in for visualization
-    - add more hyper parameter features.
-    - maybe have a crack at apple gpu acceleration?
-    """
+"""
+To do now:
+
+- make all hard coded number/ parameters into vars for easy changing
+- make network capable of batches.
+- would network train faster if activation and loss was calc'd without calling function? e.g calc activation in-line
+"""
